@@ -5,15 +5,15 @@ module QC
     def execute(stmt, *params)
       log(:level => :debug, :action => "exec_sql", :sql => stmt.inspect)
       begin
-        params = nil if params.empty?
-        r = connection.exec(stmt, params)
-        result = []
-        r.each {|t| result << t}
-        result.length > 1 ? result : result.pop
+	params = nil if params.empty?
+	r = connection.exec(stmt, params)
+	result = []
+	r.each {|t| result << t}
+	result.length > 1 ? result : result.pop
       rescue PGError => e
-        log(:error => e.inspect)
-        disconnect
-        raise
+	log(:error => e.inspect)
+	disconnect
+	raise
       end
     end
 
@@ -34,24 +34,24 @@ module QC
 
     def drain_notify
       until connection.notifies.nil?
-        log(:level => :debug, :action => "drain_notifications")
+	log(:level => :debug, :action => "drain_notifications")
       end
     end
 
     def wait_for_notify(t)
       connection.wait_for_notify(t) do |event, pid, msg|
-        log(:level => :debug, :action => "received_notification")
+	log(:level => :debug, :action => "received_notification")
       end
     end
 
     def transaction
       begin
-        execute("BEGIN")
-        yield
-        execute("COMMIT")
+	execute("BEGIN")
+	yield
+	execute("COMMIT")
       rescue Exception
-        execute("ROLLBACK")
-        raise
+	execute("ROLLBACK")
+	raise
       end
     end
 
@@ -64,33 +64,35 @@ module QC
     end
 
     def disconnect
-      connection.finish
+      # connection.finish
     ensure
       @connection = nil
     end
 
     def connect
       log(:level => :debug, :action => "establish_conn")
-      conn = PGconn.connect(
-        db_url.host,
-        db_url.port || 5432,
-        nil, '', #opts, tty
-        db_url.path.gsub("/",""), # database name
-        db_url.user,
-        db_url.password
-      )
-      if conn.status != PGconn::CONNECTION_OK
-        log(:level => :error, :message => conn.error)
+      if db_url.nil? && Object.const_defined?('ActiveRecord')
+	conn = ActiveRecord::Base.connection.raw_connection
+      else
+	conn = PGconn.connect(
+	  db_url.host,
+	  db_url.port || 5432,
+	  nil, '', #opts, tty
+	  db_url.path.gsub("/",""), # database name
+	  db_url.user,
+	  db_url.password
+	)
+	if conn.status != PGconn::CONNECTION_OK
+	  log(:level => :error, :message => conn.error)
+	end
       end
       conn
     end
 
     def db_url
       return @db_url if @db_url
-      url = ENV["QC_DATABASE_URL"] ||
-            ENV["DATABASE_URL"]    ||
-            raise(ArgumentError, "missing QC_DATABASE_URL or DATABASE_URL")
-      @db_url = URI.parse(url)
+      url = ENV["QC_DATABASE_URL"] || ENV["DATABASE_URL"]
+      @db_url = URI.parse(url) unless url.nil?
     end
 
     def log(msg)
